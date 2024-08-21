@@ -1,0 +1,148 @@
+### 1. Importing Libraries
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import tensorflow as tf
+import datetime as dt
+
+import plotly.graph_objects as go
+import plotly.express as px
+
+from itertools import cycle
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from keras.models import Sequential
+from keras.layers import LSTM, Dropout, Dense
+
+import yfinance as yf
+```
+
+### 2. Data Collection
+```python
+data_train = yf.download('^BSESN', start='2017-03-31', end='2021-03-31')
+train = data_train.reset_index()
+train = train.drop(['Adj Close'], axis=1)
+```
+
+### 3. Data Preprocessing
+```python
+sc = MinMaxScaler(feature_range=(0,1))
+train_set_scaled = sc.fit_transform(train.iloc[:, 1:2].values)
+
+X_train, y_train = [], []
+for i in range(60, len(train_set_scaled)):
+    X_train.append(train_set_scaled[i-60:i, 0])
+    y_train.append(train_set_scaled[i, 0])
+X_train, y_train = np.array(X_train), np.array(y_train)
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+```
+
+### 4. Building the LSTM Model
+```python
+lstm_model = Sequential()
+
+lstm_model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+lstm_model.add(Dropout(0.2))
+
+lstm_model.add(LSTM(units=50, return_sequences=True))
+lstm_model.add(Dropout(0.2))
+
+lstm_model.add(LSTM(units=50, return_sequences=True))
+lstm_model.add(Dropout(0.2))
+
+lstm_model.add(LSTM(units=50))
+lstm_model.add(Dropout(0.2))
+
+lstm_model.add(Dense(units=1))
+
+lstm_model.compile(optimizer='adam', loss='mean_squared_error')
+lstm_model.fit(X_train, y_train, epochs=100, batch_size=50)
+```
+
+### 5. Testing and Prediction
+```python
+data_test = yf.download('^BSESN', start='2021-04-01', end='2022-03-31')
+test = data_test.reset_index()
+test_set = test.iloc[:, 1:2].values
+
+dataset_total = pd.concat((train['Open'], test['Open']), axis=0)
+inputs = dataset_total[len(dataset_total) - len(data_test) - 60:].values
+inputs = inputs.reshape(-1,1)
+inputs = sc.transform(inputs)
+
+X_test = []
+for i in range(60, len(inputs)):
+    X_test.append(inputs[i-60:i, 0])
+X_test = np.array(X_test)
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+predicted_bse_stock_price = lstm_model.predict(X_test)
+predicted_bse_stock_price = sc.inverse_transform(predicted_bse_stock_price)
+
+plt.figure(figsize=(10, 6))
+plt.plot(test_set, color='#0b1d78', label='BSE Stock Price')
+plt.plot(predicted_bse_stock_price, color='#1fe074', label='Predicted BSE Stock Price')
+plt.title('BSE Stock Price Prediction')
+plt.xlabel('Time')
+plt.ylabel('Actual BSE Stock Price')
+plt.legend()
+plt.show()
+```
+
+### 6. Sentiment Analysis with TextBlob and VaderSentiment
+```python
+from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import nltk
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+nltk.download('stopwords')
+nltk.download('omw-1.4')
+nltk.download('wordnet')
+
+indf = pd.read_csv('/india-news-headlines[1].csv')
+indf['publish_date'] = pd.to_datetime(indf['publish_date'], format='%Y%m%d')
+
+indf = indf.loc[(indf['publish_date'] >= '2017-03-31') & (indf['publish_date'] <= '2021-03-31')]
+indf = indf.reset_index(drop=True)
+
+bse_merge = pd.merge(train_new, indf, how='inner', on='date')
+
+def get_subjectivity(text):
+    return TextBlob(text).sentiment.subjectivity
+
+def get_polarity(text):
+    return TextBlob(text).sentiment.polarity
+
+bse_merge['subjectivity'] = bse_merge['headline'].apply(get_subjectivity)
+bse_merge['polarity'] = bse_merge['headline'].apply(get_polarity)
+
+# Visualization of sentiment analysis
+plt.figure(figsize=(10, 6))
+pd.DataFrame(bse_merge['polarity']).plot(kind='density', color='#0b1d78')
+plt.title("Density Plot of Polarity")
+plt.show()
+
+plt.figure(figsize=(10, 6))
+pd.DataFrame(bse_merge['subjectivity']).plot(kind='density', color='#1fe074')
+plt.title("Density Plot of Subjectivity")
+plt.show()
+```
+
+### 7. Model Training and Evaluation
+```python
+from catboost import CatBoostRegressor
+
+X = df_scaled.drop("close", axis=1)
+y = df_scaled["close"]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+cb = CatBoostRegressor(iterations=200, learning_rate=0.1, depth=5)
+cb.fit(X_train, y_train)
+y_pred_cat = cb.predict(X_test)
+```
+
