@@ -1,4 +1,4 @@
-# Stock Prediction Using Sentimental Analysis Project
+# Stock Prediction using Numerical & Sentiment Analysis Project
 
 ## Overview
 
